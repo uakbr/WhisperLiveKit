@@ -56,6 +56,17 @@ pip install whisperlivekit
 
 2. **Open your browser** and navigate to `http://localhost:8000`. Start speaking and watch your words appear in real-time!
 
+#### Desktop GUI (optional)
+
+Prefer a native window? Install the GUI extra and launch the app:
+
+```bash
+pip install "whisperlivekit[gui]"
+whisperlivekit-gui --model base --language en
+```
+
+This opens a desktop window embedding the included web UI (falls back to your default browser if `pywebview` is not installed). All server flags like `--host`, `--port`, `--diarization`, etc. are supported.
+
 
 > - See [tokenizer.py](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/whisperlivekit/simul_whisper/whisper/tokenizer.py) for the list of all available languages.
 > - For HTTPS requirements, see the **Parameters** section for SSL configuration options.

@@ -36,12 +36,14 @@ dependencies = [
 
 [project.optional-dependencies]
 sentence = ["mosestokenizer", "wtpsplit"]
+gui = ["pywebview"]
 
 [project.urls]
 Homepage = "https://github.com/QuentinFuxa/WhisperLiveKit"
 
 [project.scripts]
 whisperlivekit-server = "whisperlivekit.basic_server:main"
+whisperlivekit-gui = "whisperlivekit.gui_app:main"
 
 [tool.setuptools]
 packages = ["whisperlivekit", "whisperlivekit.diarization", "whisperlivekit.simul_whisper", "whisperlivekit.simul_whisper.whisper", "whisperlivekit.simul_whisper.whisper.assets", "whisperlivekit.simul_whisper.whisper.normalizers", "whisperlivekit.web", "whisperlivekit.whisper_streaming_custom"]
