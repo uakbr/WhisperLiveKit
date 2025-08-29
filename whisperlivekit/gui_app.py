@@ -2,6 +2,7 @@ import threading
 import time
 import webbrowser
 import socket
+import os
 
 import uvicorn
 
@@ -16,32 +17,22 @@ def _is_port_open(host: str, port: int, timeout: float = 0.25) -> bool:
             return False
 
 
-def _run_server(config: uvicorn.Config, server_ready: threading.Event):
-    server = uvicorn.Server(config)
-
-    # Expose server to config so we can signal shutdown later if needed
-    config.loaded_app = None  # placeholder attribute for clarity
-
+def _run_server(server: uvicorn.Server, server_ready: threading.Event):
     # Run the server; when started, set the event
     def _startup_notify():
         server_ready.set()
-
     # Monkey-patch install_signal_handlers to avoid interfering with GUI loop
     original_install = server.install_signal_handlers
     server.install_signal_handlers = lambda: None
-
     # Wrap startup to notify readiness
     original_startup = server.startup
-
     async def startup_wrapper():
         await original_startup()
         _startup_notify()
-
     server.startup = startup_wrapper  # type: ignore
     try:
         server.run()
     finally:
-        # Restore in case
         server.install_signal_handlers = original_install
 
 
@@ -56,6 +47,10 @@ def main():
     from whisperlivekit.parse_args import parse_args
 
     args = parse_args()
+    # For GUI, default to disabling VAC to avoid heavy torch.hub downloads
+    # unless explicitly enabled by environment variable.
+    if not os.environ.get("WLK_GUI_ENABLE_VAC"):
+        setattr(args, "no_vac", True)
 
     # Configure uvicorn to serve the existing FastAPI app
     uvicorn_kwargs = {
@@ -76,17 +71,20 @@ def main():
         })
 
     config = uvicorn.Config(**uvicorn_kwargs)
+    server = uvicorn.Server(config)
 
     # Start server in a background thread
     server_ready = threading.Event()
-    server_thread = threading.Thread(target=_run_server, args=(config, server_ready), daemon=True)
+    server_thread = threading.Thread(target=_run_server, args=(server, server_ready), daemon=True)
     server_thread.start()
 
     # Wait for server to come up
     url_scheme = "https" if ("ssl_certfile" in uvicorn_kwargs) else "http"
-    base_url = f"{url_scheme}://{args.host}:{args.port}"
+    display_host = "localhost" if args.host in ("0.0.0.0", "::", "0:0:0:0:0:0:0:0") else args.host
+    base_url = f"{url_scheme}://{display_host}:{args.port}"
+    probe_host = "127.0.0.1" if args.host in ("0.0.0.0", "::", "0:0:0:0:0:0:0:0") else args.host
     for _ in range(200):  # wait up to ~10s
-        if server_ready.is_set() or _is_port_open(args.host, args.port):
+        if server_ready.is_set() or _is_port_open(probe_host, args.port):
             break
         time.sleep(0.05)
 
@@ -94,9 +92,31 @@ def main():
     try:
         import webview  # type: ignore
 
-        # Create and run the window; blocks until closed
-        webview.create_window("WhisperLiveKit", base_url, width=980, height=740)
-        webview.start()
+        # Create a small loading page first, then swap to the app when ready
+        LOADER_HTML = """
+        <!doctype html>
+        <html>
+        <head><meta charset='utf-8'><title>WhisperLiveKit</title>
+        <style>body{font-family:-apple-system,system-ui,Segoe UI,Roboto,Ubuntu;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
+        .wrap{color:#333;text-align:center}.spin{width:28px;height:28px;border:3px solid #ddd;border-top-color:#333;border-radius:50%;animation:spin 0.9s linear infinite;margin:0 auto 12px}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .sub{color:#666;font-size:13px}</style></head>
+        <body><div class='wrap'><div class='spin'></div><div>Starting local server…</div>
+        <div class='sub'>This may take a few seconds on first run.</div></div></body></html>
+        """
+
+        window = webview.create_window("WhisperLiveKit", html=LOADER_HTML, width=980, height=740)
+
+        def _wait_and_load():
+            # Wait until the port responds, then navigate
+            # Allow generous startup time for first-run model/cache
+            for _ in range(1200):  # up to ~120s
+                if server_ready.is_set() or _is_port_open(probe_host, args.port):
+                    break
+                time.sleep(0.1)
+            window.load_url(base_url)
+
+        webview.start(_wait_and_load)
     except Exception:
         # Fallback: open default browser
         webbrowser.open(base_url)
@@ -106,8 +126,15 @@ def main():
                 time.sleep(0.2)
         except KeyboardInterrupt:
             pass
+    finally:
+        # Signal server to exit and join thread
+        try:
+            server.should_exit = True
+        except Exception:
+            pass
+        if server_thread.is_alive():
+            server_thread.join(timeout=5)
 
 
 if __name__ == "__main__":
     main()
-

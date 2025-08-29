@@ -7,7 +7,6 @@ import traceback
 from whisperlivekit.timed_objects import ASRToken, Silence
 from whisperlivekit.core import TranscriptionEngine, online_factory, online_diarization_factory
 from whisperlivekit.ffmpeg_manager import FFmpegManager, FFmpegState
-from whisperlivekit.silero_vad_iterator import FixedVADIterator
 from whisperlivekit.results_formater import format_output, format_time
 # Set up logging once
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -62,6 +61,8 @@ class AudioProcessor:
         self.tokenizer = models.tokenizer
         self.vac_model = models.vac_model
         if self.args.vac:
+            # Lazy import to avoid torch dependency when VAC is disabled
+            from whisperlivekit.silero_vad_iterator import FixedVADIterator
             self.vac = FixedVADIterator(models.vac_model)
         else:
             self.vac = None

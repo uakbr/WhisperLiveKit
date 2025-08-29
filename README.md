@@ -67,6 +67,10 @@ whisperlivekit-gui --model base --language en
 
 This opens a desktop window embedding the included web UI (falls back to your default browser if `pywebview` is not installed). All server flags like `--host`, `--port`, `--diarization`, etc. are supported.
 
+Notes for the GUI launcher:
+- By default, the GUI disables VAC to avoid a slow first-run Torch Hub download. Enable it explicitly with `WLK_GUI_ENABLE_VAC=1 whisperlivekit-gui ...` if you want VAC.
+- On the first run, the window shows a short “Starting local server…” page while the backend initializes. Large models may increase this time.
+
 
 > - See [tokenizer.py](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/whisperlivekit/simul_whisper/whisper/tokenizer.py) for the list of all available languages.
 > - For HTTPS requirements, see the **Parameters** section for SSL configuration options.
